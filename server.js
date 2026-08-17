@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
@@ -6,69 +7,32 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ========== KONFIGURASI SUPABASE ==========
-const SUPABASE_URL = 'https://xxxx.supabase.co'; // GANTI dengan URL lo
-const SUPABASE_KEY = 'xxxx'; // GANTI dengan anon key lo
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-// ========== TEST DATABASE ==========
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.log("WARNING: SUPABASE_URL atau SUPABASE_KEY belum diisi di Railway Variables");
+}
+
+const supabase = createClient(SUPABASE_URL || '', SUPABASE_KEY || '');
+
+app.get('/', (req, res) => {
+    res.send('Prismex-Shallar Server Gateway is running!');
+});
+
 app.get('/api/health', async (req, res) => {
-    const { data, error } = await supabase.from('operators').select('*').limit(1);
-    if (error) return res.status(500).json({ success: false, error: error.message });
-    res.json({ success: true, message: 'Server gateway online!', data });
+    try {
+        const { data, error } = await supabase.from('operators').select('*').limit(1);
+        if (error) {
+            return res.status(500).json({ success: false, error: error.message });
+        }
+        res.json({ success: true, message: 'Server gateway online!', data });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
-// ========== DAFTAR OPERATOR ==========
-app.post('/api/operator/register', async (req, res) => {
-    const { operator_id, protocol, region, wallet_address } = req.body;
-
-    const { data, error } = await supabase
-        .from('operators')
-        .insert([{ operator_id, protocol, region, wallet_address, status: 'pending' }]);
-
-    if (error) return res.status(400).json({ success: false, error: error.message });
-    res.json({ success: true, message: 'Pendaftaran operator diterima!', data });
-});
-
-// ========== TRANSAKSI ==========
-app.post('/api/transact', async (req, res) => {
-    const { tx_id, protocol, sender_user_id, receiver_user_id, amount, operator_id } = req.body;
-
-    const fee_operator = amount * 0.001;
-    const fee_treasury = amount * 0.002;
-    const netAmount = amount - fee_operator - fee_treasury;
-
-    const { data, error } = await supabase
-        .from('transactions')
-        .insert([{
-            tx_id,
-            protocol,
-            sender_user_id,
-            receiver_user_id,
-            amount: netAmount,
-            fee_operator,
-            fee_treasury,
-            operator_id
-        }]);
-
-    if (error) return res.status(400).json({ success: false, error: error.message });
-    res.json({ success: true, message: 'Transaksi berhasil!', netAmount });
-});
-
-// ========== CEK SALDO ==========
-app.get('/api/balance/:user_id', async (req, res) => {
-    const { user_id } = req.params;
-    const { data, error } = await supabase
-        .from('balances')
-        .select('*')
-        .eq('user_id', user_id);
-
-    if (error) return res.status(400).json({ success: false, error: error.message });
-    res.json({ success: true, balances: data });
-});
-
-// ========== JALANKAN SERVER ==========
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Server Gateway Prismex-Shallar jalan di port ${PORT}`);
+    console.log(`Server jalan di port ${PORT}`);
 });
